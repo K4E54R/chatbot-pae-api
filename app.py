@@ -31,30 +31,7 @@ def load_rag():
     vectorstore = Chroma(persist_directory="./db_conocimiento", embedding_function=embeddings)
     return vectorstore.as_retriever(search_kwargs={"k": 4})
 
-@st.cache_resource
-def get_available_model():
-    """Detecta automáticamente el mejor modelo disponible en la cuenta"""
-    try:
-        modelos_validos = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                modelos_validos.append(m.name)
-        
-        # Priorizar flash, luego pro, o el primero compatible
-        for m in modelos_validos:
-            if "flash" in m:
-                return m
-        for m in modelos_validos:
-            if "pro" in m:
-                return m
-        if modelos_validos:
-            return modelos_validos[0]
-    except Exception:
-        pass
-    return "gemini-1.5-flash"
-
 retriever = load_rag()
-model_name_auto = get_available_model()
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
@@ -82,7 +59,7 @@ Responde de forma clara y precisa basándote ÚNICAMENTE en el siguiente context
 
 Pregunta del usuario: {prompt}
 """
-            model = genai.GenerativeModel(model_name_auto)
+            model = genai.GenerativeModel("models/gemini-3.6-flash")
             response = model.generate_content(prompt_completo)
             
             reply = response.text
