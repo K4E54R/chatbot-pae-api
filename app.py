@@ -49,16 +49,16 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            # 1. Recuperar contexto rápido
             docs = retriever.invoke(prompt)
             context = "\n\n---\n\n".join([d.page_content for d in docs])
             
             prompt_completo = f"""Eres el Asistente Virtual Oficial del Programa de Asesores Electorales (PAE) del Tribunal Supremo de Elecciones (TSE) de Costa Rica.
 
 INSTRUCCIONES DE RESPUESTA:
-1. Responde de forma clara, directa y estructurada con base en el contexto normativo y operativo.
-2. Si te preguntan por las funciones de una Persona Asesora Electoral (AEL), enfócate en sus labores de campo y coordinación electoral.
-3. Utiliza viñetas y negrita para facilitar la lectura.
+1. Responde de forma clara, directa, concisa y estructurada basándote en el contexto normativo y operativo.
+2. REGLA OBLIGATORIA DE CIERRE: Al final de cada respuesta debes incluir siempre una frase de referencia indicando la página o sección respectiva, usando el formato:
+   - "Entre otros, para más información verifica el manual de la persona asesora en la página [Número de Página o Sección]."
+   - Si en el contexto aparecen páginas específicas (como Pág. 34, Pág. 44, Pág. 54, etc.), indica el número exacto. Si no aparece el número exacto, indica la sección o tema respectivo del manual.
 
 CONTEXTO:
 {context}
@@ -67,11 +67,8 @@ PREGUNTA:
 {prompt}
 """
             model = genai.GenerativeModel("models/gemini-3.6-flash")
-            
-            # 2. Generación en tiempo real (Streaming)
             response_stream = model.generate_content(prompt_completo, stream=True)
             
-            # Función generadora para escribir progresivamente en Streamlit
             def generate_chunks():
                 for chunk in response_stream:
                     if chunk.text:
