@@ -6,7 +6,7 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Asistente PAE", page_icon="🤖", layout="centered")
 
-# Configurar API Key de Gemini
+# Configuración de la API Key
 api_key = os.environ.get("MI_API_KEY")
 if not api_key and "MI_API_KEY" in st.secrets:
     api_key = st.secrets["MI_API_KEY"]
@@ -29,7 +29,8 @@ st.caption("Consultas operativas y normativas del Programa de Asesores Electoral
 def load_rag():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     vectorstore = Chroma(persist_directory="./db_conocimiento", embedding_function=embeddings)
-    return vectorstore.as_retriever(search_kwargs={"k": 4})
+    # k=8 para traer mayor profundidad y contexto normativo
+    return vectorstore.as_retriever(search_kwargs={"k": 8})
 
 retriever = load_rag()
 
@@ -50,14 +51,20 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
     with st.chat_message("assistant"):
         try:
             docs = retriever.invoke(prompt)
-            context = "\n\n".join([d.page_content for d in docs])
+            context = "\n\n---\n\n".join([d.page_content for d in docs])
             
-            prompt_completo = f"""Eres el Asesor virtual del Programa de Asesores Electorales (PAE) del TSE Costa Rica.
-Responde de forma clara y precisa basándote ÚNICAMENTE en el siguiente contexto normativo y operativo:
+            prompt_completo = f"""Eres el Asistente Virtual Oficial del Programa de Asesores Electorales (PAE) del Tribunal Supremo de Elecciones (TSE) de Costa Rica.
 
+INSTRUCCIONES DE RESPUESTA:
+1. Responde de manera exhaustiva, estructurada, clara y con un alto nivel de detalle basándote en la información y normativa del contexto.
+2. Si te preguntan por las funciones de una Persona Asesora Electoral (AEL), distingue con claridad sus funciones en territorio (coordinación cantonal, juntas cantonales, ratificación de centros, capacitación, custodia de tulas, día de la elección) de la estructura administrativa interna del PAE.
+3. Utiliza viñetas, títulos destacados y un formato fácil de leer.
+
+CONTEXTO NORMATIVO Y OPERATIVO:
 {context}
 
-Pregunta del usuario: {prompt}
+PREGUNTA DEL USUARIO:
+{prompt}
 """
             model = genai.GenerativeModel("models/gemini-3.6-flash")
             response = model.generate_content(prompt_completo)
@@ -66,4 +73,4 @@ Pregunta del usuario: {prompt}
             st.markdown(reply)
             st.session_state.messages.append({"role": "assistant", "content": reply})
         except Exception as err:
-            st.error(f"Error en el modelo: {str(err)}")
+            st.error(f"Error al procesar la respuesta: {str(err)}")
