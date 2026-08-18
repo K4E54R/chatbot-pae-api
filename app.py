@@ -6,7 +6,7 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Asistente PAE", page_icon="🤖", layout="centered")
 
-# Configurar API Key de Gemini
+# Configuración de la API Key de Gemini
 api_key = os.environ.get("MI_API_KEY")
 if not api_key and "MI_API_KEY" in st.secrets:
     api_key = st.secrets["MI_API_KEY"]
@@ -23,13 +23,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🤖 Asistente Virtual PAE")
-st.caption("Consultas operativas y normativas del Programa de Asesores Electorales")
+st.caption("Consultas operativas, normativas y cronograma del Programa de Asesores Electorales")
 
 @st.cache_resource
-def load_chunks():
-    """Carga los textos normativos directamente desde los JSON o base local"""
+def load_knowledge_base():
+    """Carga los fragmentos de conocimiento directamente desde los JSON"""
     chunks = []
-    # Buscar archivos JSON en el repositorio
     json_files = glob.glob("*.json") + glob.glob("**/*.json", recursive=True)
     for fpath in json_files:
         if "package" in fpath or ".streamlit" in fpath:
@@ -40,7 +39,7 @@ def load_chunks():
                 if isinstance(data, list):
                     for item in data:
                         if isinstance(item, dict):
-                            chunks.append(item.get("contenido") or item.get("texto") or item.get("page_content") or str(item))
+                            chunks.append(item.get("contenido") or item.get("texto") or item.get("text") or str(item))
                         elif isinstance(item, str):
                             chunks.append(item)
                 elif isinstance(data, dict):
@@ -50,10 +49,10 @@ def load_chunks():
             pass
     return [c for c in chunks if len(c.strip()) > 20]
 
-all_chunks = load_chunks()
+all_chunks = load_knowledge_base()
 
-def search_relevant_chunks(query, chunks, top_k=6):
-    """Filtro contextual ligero por coincidencia y relevancia léxica"""
+def retrieve_context(query, chunks, top_k=6):
+    """Búsqueda ligera por relevancia léxica y términos clave"""
     if not chunks:
         return ""
     words = [w.lower() for w in query.split() if len(w) > 3]
@@ -71,7 +70,7 @@ def search_relevant_chunks(query, chunks, top_k=6):
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "¡Hola! 👋 Soy el Asesor virtual del Programa de Asesores Electorales (PAE). ¿En qué duda normativa u operativa te puedo colaborar hoy?"}
+        {"role": "assistant", "content": "¡Hola! 👋 Soy el Asesor virtual del Programa de Asesores Electorales (PAE). ¿En qué duda normativa, operativa o de cronograma te puedo colaborar hoy?"}
     ]
 
 for msg in st.session_state.messages:
@@ -85,15 +84,15 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
 
     with st.chat_message("assistant"):
         try:
-            context = search_relevant_chunks(prompt, all_chunks, top_k=6)
+            context = retrieve_context(prompt, all_chunks, top_k=6)
             
             prompt_completo = f"""Eres el Asistente Virtual Oficial del Programa de Asesores Electorales (PAE) del Tribunal Supremo de Elecciones (TSE) de Costa Rica.
 
-INSTRUCCIONES DE RESPUESTA:
-1. Responde de forma clara, directa, concisa y estructurada basándote en el contexto normativo y operativo.
-2. REGLA OBLIGATORIA DE CIERRE: Al final de cada respuesta debes incluir siempre una frase de referencia indicando la página o sección respectiva, usando el formato:
+REGLAS DE RESPUESTA:
+1. Responde de forma clara, directa, estructurada y profesional utilizando viñetas y negrita.
+2. OBLIGACIÓN DE FECHAS Y FUENTES: Cuando la respuesta involucre plazos, cronogramas, trámites o deberes, incluye siempre las FECHAS EXACTAS y las FUENTES NORMATIVAS (artículos de leyes, códigos o reglamentos) que correspondan según el contexto.
+3. CIERRE OBLIGATORIO: Al final de cada respuesta añade la referencia documental con el formato:
    - "Entre otros, para más información verifica el manual de la persona asesora en la página [Número de Página o Sección]."
-   - Si en el contexto aparecen páginas específicas, indica el número exacto. Si no aparece el número exacto, indica la sección o tema respectivo del manual.
 
 CONTEXTO:
 {context}
@@ -104,12 +103,12 @@ PREGUNTA:
             model = genai.GenerativeModel("models/gemini-3.6-flash")
             response_stream = model.generate_content(prompt_completo, stream=True)
             
-            def generate_chunks():
+            def stream_output():
                 for chunk in response_stream:
                     if chunk.text:
                         yield chunk.text
 
-            reply = st.write_stream(generate_chunks)
+            reply = st.write_stream(stream_output)
             st.session_state.messages.append({"role": "assistant", "content": reply})
             
         except Exception as err:
