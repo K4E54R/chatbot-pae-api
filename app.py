@@ -6,7 +6,7 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Asistente PAE", page_icon="🤖", layout="centered")
 
-# Configuración de la API Key
+# Configurar API Key de Gemini
 api_key = os.environ.get("MI_API_KEY")
 if not api_key and "MI_API_KEY" in st.secrets:
     api_key = st.secrets["MI_API_KEY"]
@@ -29,8 +29,7 @@ st.caption("Consultas operativas y normativas del Programa de Asesores Electoral
 def load_rag():
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     vectorstore = Chroma(persist_directory="./db_conocimiento", embedding_function=embeddings)
-    # k=8 para traer mayor profundidad y contexto normativo
-    return vectorstore.as_retriever(search_kwargs={"k": 8})
+    return vectorstore.as_retriever(search_kwargs={"k": 5})
 
 retriever = load_rag()
 
@@ -50,27 +49,36 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
 
     with st.chat_message("assistant"):
         try:
+            # 1. Recuperar contexto rápido
             docs = retriever.invoke(prompt)
             context = "\n\n---\n\n".join([d.page_content for d in docs])
             
             prompt_completo = f"""Eres el Asistente Virtual Oficial del Programa de Asesores Electorales (PAE) del Tribunal Supremo de Elecciones (TSE) de Costa Rica.
 
 INSTRUCCIONES DE RESPUESTA:
-1. Responde de manera exhaustiva, estructurada, clara y con un alto nivel de detalle basándote en la información y normativa del contexto.
-2. Si te preguntan por las funciones de una Persona Asesora Electoral (AEL), distingue con claridad sus funciones en territorio (coordinación cantonal, juntas cantonales, ratificación de centros, capacitación, custodia de tulas, día de la elección) de la estructura administrativa interna del PAE.
-3. Utiliza viñetas, títulos destacados y un formato fácil de leer.
+1. Responde de forma clara, directa y estructurada con base en el contexto normativo y operativo.
+2. Si te preguntan por las funciones de una Persona Asesora Electoral (AEL), enfócate en sus labores de campo y coordinación electoral.
+3. Utiliza viñetas y negrita para facilitar la lectura.
 
-CONTEXTO NORMATIVO Y OPERATIVO:
+CONTEXTO:
 {context}
 
-PREGUNTA DEL USUARIO:
+PREGUNTA:
 {prompt}
 """
             model = genai.GenerativeModel("models/gemini-3.6-flash")
-            response = model.generate_content(prompt_completo)
             
-            reply = response.text
-            st.markdown(reply)
+            # 2. Generación en tiempo real (Streaming)
+            response_stream = model.generate_content(prompt_completo, stream=True)
+            
+            # Función generadora para escribir progresivamente en Streamlit
+            def generate_chunks():
+                for chunk in response_stream:
+                    if chunk.text:
+                        yield chunk.text
+
+            reply = st.write_stream(generate_chunks)
             st.session_state.messages.append({"role": "assistant", "content": reply})
+            
         except Exception as err:
             st.error(f"Error al procesar la respuesta: {str(err)}")
