@@ -6,7 +6,7 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="Asistente PAE", page_icon="🤖", layout="centered")
 
-# Configuración de clave Gemini
+# Configurar API Key de Gemini
 api_key = os.environ.get("MI_API_KEY")
 if not api_key and "MI_API_KEY" in st.secrets:
     api_key = st.secrets["MI_API_KEY"]
@@ -35,7 +35,7 @@ retriever = load_rag()
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "¡Hola! 👋 Soy el Asesor virtual del Programa de Asesores Electorales (PAE). ¿En qué duda normativa u operativa te colaboro hoy?"}
+        {"role": "assistant", "content": "¡Hola! 👋 Soy el Asesor virtual del Programa de Asesores Electorales (PAE). ¿En qué duda normativa u operativa te puedo colaborar hoy?"}
     ]
 
 for msg in st.session_state.messages:
@@ -48,16 +48,32 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        docs = retriever.invoke(prompt)
-        context = "\n\n".join([d.page_content for d in docs])
-        
-        system_instruction = f"""Eres el Asesor virtual del Programa de Asesores Electorales (PAE) del TSE Costa Rica.
+        try:
+            docs = retriever.invoke(prompt)
+            context = "\n\n".join([d.page_content for d in docs])
+            
+            prompt_completo = f"""Eres el Asesor virtual del Programa de Asesores Electorales (PAE) del TSE Costa Rica.
 Responde de forma clara y precisa basándote ÚNICAMENTE en el siguiente contexto normativo y operativo:
 
 {context}
+
+Pregunta del usuario: {prompt}
 """
-        model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system_instruction)
-        response = model.generate_content(prompt)
-        reply = response.text
-        st.markdown(reply)
-        st.session_state.messages.append({"role": "assistant", "content": reply})
+            # Uso de identificador compatible y generación directa
+            model = genai.GenerativeModel("models/gemini-1.5-flash")
+            response = model.generate_content(prompt_completo)
+            
+            reply = response.text
+            st.markdown(reply)
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+        except Exception as e:
+            # Fallback en caso de variación en el nombre del modelo
+            try:
+                model = genai.GenerativeModel("gemini-1.5-flash-latest")
+                response = model.generate_content(prompt_completo)
+                reply = response.text
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+            except Exception as err:
+                error_msg = f"Error al procesar la respuesta: {str(err)}"
+                st.error(error_msg)
